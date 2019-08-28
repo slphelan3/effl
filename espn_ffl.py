@@ -8,10 +8,8 @@ Created on Sat Aug 10 18:28:26 2019
 
 import pandas as pd
 import requests
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy import stats
-import numpy as np
+#import seaborn as sns
+#import matplotlib.pyplot as plt
 
 class espn_ffl:
     def __init__(self, league_id):
@@ -19,7 +17,7 @@ class espn_ffl:
         self.team_results, self.outcome_df, self.all_teams, self.df_out, self.years=self.pull_from_api()
         self.yearFrom=self.years[0]
         self.yearTo=self.years[-1]
-        
+
     # figure out type of win
     def lucky_win(self,row):
         if row['Win']==1 and row['Diff1'] <= 0:
@@ -30,17 +28,17 @@ class espn_ffl:
             return 'Unlucky Loss'
         elif row['Win']==0 and row['Diff1'] <= 0:
             return 'Deserving Loss'
-    
+
     def clean_team_names(self,clean_dict,df_out):
         # clean up team names
         df_out['Team1']=df_out['Team1'].replace(clean_dict)
         df_out['Team2']=df_out['Team2'].replace(clean_dict)
         return df_out
-        
+
     # pull from api dictionary
     def pull_from_api(self):
         past_szn_base='https://fantasy.espn.com/apis/v3/games/ffl/leagueHistory/'+self.league_id+'?seasonId='
-        
+
         years_init=range(2000,2019)
         df_out=pd.DataFrame()
         avgs_out=pd.DataFrame()
@@ -52,7 +50,7 @@ class espn_ffl:
             if r.status_code==200:
                 years.append(year)
                 d = r.json()[0]
-                
+
                 df = [[
                         game['matchupPeriodId'],
                         game.get('home')['teamId'], game.get('home')['totalPoints'],
@@ -61,11 +59,11 @@ class espn_ffl:
                     ] for game in d['schedule'] if game.get('away') is not None]
                 df = pd.DataFrame(df, columns=['Week', 'Team1', 'Score1', 'Team2', 'Score2', 'Year'])
                 df['Type'] = ['Regular' if w<=14 else 'Playoff' for w in df['Week']]
-                
+
                 # only keep regular season
                 df=df[df['Type']=='Regular']
-                
-                
+
+
                 # get average score by week
                 avgs = (df
                  .filter(['Week', 'Score1', 'Score2'])
@@ -75,10 +73,10 @@ class espn_ffl:
                  .reset_index()
                 )
                 avgs['Year']=year
-    
+
                 avgs_out=pd.concat([avgs_out,avgs])
                 df_out=pd.concat([df_out,df])
-                
+
                 # get json without params to get team mappings
                 r2=requests.get(url)
                 d2=r2.json()[0]
@@ -88,48 +86,48 @@ class espn_ffl:
                 # replace id number with abbrev
                 df_out['Team1']=df_out['Team1'].replace(team_dict[year])
                 df_out['Team2']=df_out['Team2'].replace(team_dict[year])
-        
+
         # clean up team names
         clean_dict={'BV': 'MCT', 'ZELE': 'MIKE', 'BJ': 'MCT','ROGE': 'GOOS', 'BIAL': 'AJB', 'PHEL': 'PHE','BILL':'PHE'}
         df_out=self.clean_team_names(clean_dict,df_out)
-        
-        # get list of all teams    
+
+        # get list of all teams
         all_teams=pd.concat([df_out['Team1'],df_out['Team2']]).value_counts().index
-        
+
         # re-index avgs_out
         avgs_out.index=[beep for beep in range(len(avgs_out.index))]
-        
-            
+
+
         outcome_df=pd.DataFrame()
         team_results={}
         for team in all_teams:
             tm=team
             # grab all games with this team
             df2 = df_out.query('Team1 == @tm | Team2 == @tm').reset_index(drop=True)
-            
+
             # move the team of interest to "Team1" column
             ix = list(df2['Team2'] == tm)
             df2.loc[ix, ['Team1','Score1','Team2','Score2']] = \
                 df2.loc[ix, ['Team2','Score2','Team1','Score1']].values
-            
+
             # add new score and win cols
             df2['Win']=df2['Score1'] > df2['Score2']
             df2['Diff1']=df2['Score1'] - avgs_out['Score']
             df2['Diff2']=df2['Score2'] - avgs_out['Score']
-            
+
             # add lucky/unlucky win
             df2['Outcome']=df2.apply(self.lucky_win,axis=1)
-            
+
             outcome_df=pd.concat([outcome_df,df2])
             team_results[team]=df2
-            
-            
-            
+
+
+
         return team_results, outcome_df, all_teams, df_out, years
-    
+
     # create differential score plot
     def plot_differential(self,team,suppress=False):
-        plt.figure()
+#        plt.figure()
         team_result=self.team_results[team]
         plot_results=pd.DataFrame()
         label1=team+' Point Diff from Weekly Average'
@@ -138,21 +136,22 @@ class espn_ffl:
         label2='Diff2'
         plot_results[label1]=team_result['Diff1']
         plot_results[label2]=team_result['Diff2']
-        
+
         plot_results['Outcome']=team_result['Outcome']
 #        plot_results['Opponent']=team_result['Team2']
         plot_results['Result Name']=team_result['Outcome'] + ' vs. ' + team_result['Team2']
-        
+
         plot_results['Win']=team_result['Win'].replace({1:'Win',0:'Loss'})
         if suppress==False:
-            ax=sns.scatterplot(x=label1,y=label2,data=plot_results,hue='Outcome')
-            ax.legend(loc='center right', bbox_to_anchor=(1.38, 0.5), ncol=1)
-        
+            pass
+#            ax=sns.scatterplot(x=label1,y=label2,data=plot_results,hue='Outcome')
+#            ax.legend(loc='center right', bbox_to_anchor=(1.38, 0.5), ncol=1)
+
         return plot_results
-    
+
     # create score histogram
     def plot_score_histogram(self,team,overlay=False,team_year=False,suppress=False):
-        plt.figure()
+#        plt.figure()
         label1=team+' Score'
         team_result=self.team_results[team]
         plot_results=pd.DataFrame()
@@ -168,33 +167,36 @@ class espn_ffl:
                 curr_label=tid+' Scores'
                 plot_results[curr_label]=self.team_results[tid]['Score1']
                 if suppress==False:
-                    ax_dict[tid]=sns.kdeplot(plot_results[curr_label])
+                    pass
+#                    ax_dict[tid]=sns.kdeplot(plot_results[curr_label])
         if suppress==False:
-            ax=sns.distplot(plot_results[label1], bins=20, kde=True)
+            pass
+#            ax=sns.distplot(plot_results[label1], bins=20, kde=True)
         return plot_results
-    
+
     # create lucky histogram
     def lucky_plot(self,team,suppress=False):
-        plt.figure()
+#        plt.figure()
         team_result=self.team_results[team]
         avg_outcomes=self.outcome_df['Outcome'].value_counts()/len(self.all_teams)
         outcomes=team_result['Outcome'].value_counts()
         avg_sum=sum(avg_outcomes.values)
         team_sum=sum(outcomes.values)
-        avg_outcomes=avg_outcomes*team_sum/avg_sum
-        
+#        avg_outcomes=avg_outcomes*team_sum/avg_sum
+
         label1=team+' Outcomes'
         label2='Average Outcomes'
-        
+
         plot_outcomes=pd.DataFrame(index=outcomes.index)
 
-        plot_outcomes[label1]=outcomes.values
-        plot_outcomes[label2]=avg_outcomes.values
+        plot_outcomes[label1]=outcomes.values/team_sum
+        plot_outcomes[label2]=avg_outcomes.values/avg_sum
         plot_outcomes = pd.melt(plot_outcomes.reset_index(), id_vars='index', var_name='Team', value_name='Count')
         if suppress==False:
-            ax=sns.factorplot(x='index', y='Count', hue='Team', data=plot_outcomes, kind='bar')
+            pass
+#            ax=sns.factorplot(x='index', y='Count', hue='Team', data=plot_outcomes, kind='bar')
         return plot_outcomes
-    
+
     def avg_ppg(self):
         teamscore=[]
         oppscore=[]
@@ -225,12 +227,12 @@ class espn_ffl:
             for year in df['Year'].unique():
                 years.append(year)
                 teams.append(team)
-                
+
                 points.append(df[df['Year']==year]['Score1'].sum()+sum(team_points[team]))
                 wins.append(df[df['Year']==year]['Win'].sum()+sum(team_wins[team]))
                 team_points[team].append(df[df['Year']==year]['Score1'].sum())
                 team_wins[team].append(df[df['Year']==year]['Win'].sum())
-        
+
 
         plot_results=pd.DataFrame()
         plot_results['Team']=teams
@@ -240,4 +242,4 @@ class espn_ffl:
         return plot_results
 
 
-    
+
